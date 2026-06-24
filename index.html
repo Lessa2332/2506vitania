@@ -30,7 +30,6 @@
     touch-action: manipulation;
   }
 
-  /* ═══ SCREENS ═══ */
   .screen {
     position: fixed; inset: 0;
     display: none;
@@ -42,7 +41,6 @@
   }
   .screen.active { display: flex; }
 
-  /* ═══ SCREEN 1: WELCOME ═══ */
   #screen-welcome {
     background: linear-gradient(160deg, #001F5B 0%, #003DA5 50%, #0081C8 100%);
     text-align: center;
@@ -154,7 +152,6 @@
     50% { transform: rotate(4deg) scale(1.1); }
   }
 
-  /* ═══ SCREEN 2: WARM-UP ═══ */
   #screen-warmup {
     background: linear-gradient(160deg, #002B7B 0%, #0060B0 100%);
     text-align: center;
@@ -219,7 +216,6 @@
     font-weight: 500;
   }
 
-  /* ═══ TIMER ═══ */
   .timer-wrap {
     display: flex;
     align-items: center;
@@ -242,7 +238,7 @@
     fill: none;
     stroke: var(--olympic-gold);
     stroke-linecap: round;
-    transition: stroke-dashoffset 1s linear;
+    transition: stroke-dashoffset 1s linear, stroke 0.5s ease;
   }
   .timer-num {
     position: absolute; inset: 0;
@@ -283,8 +279,13 @@
     letter-spacing: 0.04em;
     margin: 0 clamp(4px, 1vw, 8px);
   }
-  .btn-secondary:hover { background: rgba(255,255,255,0.2); }
-  .btn-secondary:active { transform: scale(0.96); }
+  .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+  .btn-secondary:active:not(:disabled) { transform: scale(0.96); }
+  .btn-secondary:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
 
   .btn-gold {
     background: linear-gradient(135deg, var(--olympic-gold), #FFA500);
@@ -294,7 +295,6 @@
   }
   .btn-gold:hover { box-shadow: 0 6px 30px rgba(255,215,0,0.4); }
 
-  /* ═══ SCREEN 3: PAIRS GAME ═══ */
   #screen-pairs {
     background: linear-gradient(160deg, #001845 0%, #004080 100%);
     overflow-y: auto;
@@ -359,7 +359,6 @@
     margin-bottom: clamp(8px, 1.5vh, 14px);
   }
 
-  /* ═══ SCREEN 4: FINISH ═══ */
   #screen-finish {
     background: linear-gradient(160deg, #001F5B 0%, #003DA5 50%, #0081C8 100%);
     text-align: center;
@@ -400,7 +399,6 @@
     text-shadow: 0 0 40px rgba(255,215,0,0.6);
   }
 
-  /* Floating stars */
   .stars {
     position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0;
   }
@@ -470,8 +468,8 @@
   <div class="progress-pills" id="progress-pills"></div>
 
   <div class="nav-btn-row">
-    <button class="btn-secondary" onclick="prevSport()">◀ Назад</button>
-    <button class="btn-secondary btn-gold" onclick="nextSport()">Далі ▶</button>
+    <button class="btn-secondary" id="btn-prev" onclick="prevSport()">◀ Назад</button>
+    <button class="btn-secondary btn-gold" id="btn-next" onclick="nextSport()">Далі ▶</button>
     <button class="btn-secondary" onclick="goTo('screen-pairs'); initPairs()">Гра «Пари» ▶▶</button>
   </div>
 </div>
@@ -482,7 +480,7 @@
   <div class="pairs-grid" id="pairs-grid"></div>
   <div class="pairs-score" id="pairs-score">Знайдено: 0 / 6</div>
   <div class="nav-btn-row" style="margin-top: clamp(8px,1.5vh,16px)">
-    <button class="btn-secondary" onclick="goTo('screen-warmup'); startWarmup();">◀ Руханка</button>
+    <button class="btn-secondary" onclick="returnToWarmup()">◀ Руханка</button>
     <button class="btn-secondary btn-gold" id="pairs-next" onclick="goTo('screen-finish')" style="display:none">Завершити ▶</button>
   </div>
 </div>
@@ -519,7 +517,6 @@ function goTo(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   
-  // Якщо йдемо геть з руханки — зупиняємо фоновий таймер
   if (id !== 'screen-warmup') {
     clearInterval(timerInterval);
   }
@@ -539,6 +536,7 @@ let currentSport = 0;
 let timerInterval = null;
 let timeLeft = 20;
 const circumference = 276.46;
+let isTransitioning = false;
 
 function buildPills() {
   const wrap = document.getElementById('progress-pills');
@@ -551,20 +549,28 @@ function buildPills() {
   });
 }
 
+function updateNavButtons() {
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
+  if (btnPrev) btnPrev.disabled = (currentSport === 0);
+  if (btnNext) btnNext.disabled = (currentSport === SPORTS.length - 1);
+}
+
 function updateSportDisplay(idx) {
   const s = SPORTS[idx];
   const emojiEl = document.getElementById('sport-emoji');
   emojiEl.style.animation = 'none';
-  emojiEl.offsetHeight; // reflow
+  emojiEl.offsetHeight;
   emojiEl.style.animation = '';
   emojiEl.textContent = s.emoji;
   document.getElementById('sport-name').textContent = s.name;
   document.getElementById('sport-action').textContent = s.action;
   buildPills();
+  updateNavButtons();
 }
 
 function startTimer() {
-  clearInterval(timerInterval); // Очищення старого інтервалу ПЕРЕД запуском нового
+  clearInterval(timerInterval);
   timeLeft = 20;
   updateTimerUI();
   timerInterval = setInterval(() => {
@@ -573,7 +579,10 @@ function startTimer() {
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
       if (currentSport < SPORTS.length - 1) {
-        nextSport(); // Перехід без затримок setTimeout, щоб не було накладання
+        nextSport();
+      } else {
+        goTo('screen-pairs');
+        initPairs();
       }
     }
   }, 1000);
@@ -585,7 +594,7 @@ function updateTimerUI() {
   const offset = circumference * (1 - progress);
   const circle = document.getElementById('timer-circle');
   circle.style.strokeDashoffset = offset;
-  circle.style.stroke = timeLeft > 5 ? 'var(--olympic-gold)' : '#FF4444'; // червоніє на останніх 5 сек
+  circle.style.stroke = timeLeft > 5 ? 'var(--olympic-gold)' : '#FF4444';
 }
 
 function startWarmup() {
@@ -595,21 +604,38 @@ function startWarmup() {
 }
 
 function nextSport() {
+  if (isTransitioning) return;
+  isTransitioning = true;
+  
   if (currentSport < SPORTS.length - 1) {
     currentSport++;
     updateSportDisplay(currentSport);
     startTimer();
   } else {
     clearInterval(timerInterval);
+    goTo('screen-pairs');
+    initPairs();
   }
+  
+  setTimeout(() => { isTransitioning = false; }, 400);
 }
 
 function prevSport() {
-  if (currentSport > 0) {
-    currentSport--;
-    updateSportDisplay(currentSport);
-    startTimer();
-  }
+  if (isTransitioning) return;
+  if (currentSport <= 0) return;
+  isTransitioning = true;
+  
+  currentSport--;
+  updateSportDisplay(currentSport);
+  startTimer();
+  
+  setTimeout(() => { isTransitioning = false; }, 400);
+}
+
+function returnToWarmup() {
+  goTo('screen-warmup');
+  updateSportDisplay(currentSport);
+  startTimer();
 }
 
 // ═══ PAIRS GAME ═══
@@ -624,9 +650,11 @@ const PAIRS = [
 
 let selected = [];
 let matched = 0;
+let isProcessing = false;
 
 function initPairs() {
   selected = []; matched = 0;
+  isProcessing = false;
   document.getElementById('pairs-next').style.display = 'none';
   document.getElementById('pairs-score').textContent = 'Знайдено: 0 / 6';
 
@@ -636,7 +664,6 @@ function initPairs() {
     items.push({ id: 'tool-'  + i, label: p.tool,  pairId: i, type: 'tool' });
   });
 
-  // Перемішування Fisher-Yates
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [items[i], items[j]] = [items[j], items[i]];
@@ -659,6 +686,7 @@ function initPairs() {
 }
 
 function selectCard(card) {
+  if (isProcessing) return;
   if (card.classList.contains('matched') || card.classList.contains('selected')) return;
   if (selected.length >= 2) return;
 
@@ -666,6 +694,7 @@ function selectCard(card) {
   selected.push(card);
 
   if (selected.length === 2) {
+    isProcessing = true;
     const [a, b] = selected;
     if (a.dataset.pairId === b.dataset.pairId && a.dataset.id !== b.dataset.id) {
       setTimeout(() => {
@@ -674,6 +703,7 @@ function selectCard(card) {
         matched++;
         document.getElementById('pairs-score').textContent = `Знайдено: ${matched} / 6`;
         selected = [];
+        isProcessing = false;
         if (matched === 6) {
           document.getElementById('pairs-next').style.display = 'block';
         }
@@ -685,14 +715,15 @@ function selectCard(card) {
           a.classList.remove('selected', 'wrong');
           b.classList.remove('selected', 'wrong');
           selected = [];
+          isProcessing = false;
         }, 600);
       }, 300);
     }
   }
 }
 
-// Ініціалізація індикаторів при завантаженні
 buildPills();
+updateNavButtons();
 </script>
 </body>
 </html>
