@@ -146,7 +146,6 @@
   .olympic-flame {
     font-size: clamp(40px, 8vw, 90px);
     margin-bottom: clamp(12px, 2.5vh, 24px);
-    animation: flameDance 2s ease-in-out infinite;
     opacity: 0;
     animation: flameDance 2s ease-in-out infinite, fadeUp 0.8s 0.1s forwards;
   }
@@ -427,10 +426,8 @@
 </head>
 <body>
 
-<!-- STARS BG -->
 <div class="stars" id="stars"></div>
 
-<!-- ═══ SCREEN 1: WELCOME ═══ -->
 <div class="screen active" id="screen-welcome">
   <div class="olympic-flame">🔥</div>
   <div class="rings-container">
@@ -449,7 +446,6 @@
   </button>
 </div>
 
-<!-- ═══ SCREEN 2: WARM-UP ═══ -->
 <div class="screen" id="screen-warmup">
   <div class="warmup-header">🏃 Олімпійський Експрес</div>
   <div class="warmup-desc">Покажіть рухами вид спорту! У вас <strong style="color:var(--olympic-gold)">20 секунд</strong></div>
@@ -480,19 +476,17 @@
   </div>
 </div>
 
-<!-- ═══ SCREEN 3: PAIRS GAME ═══ -->
 <div class="screen" id="screen-pairs">
   <div class="pairs-title">🎯 Знайди Пару!</div>
   <div class="pairs-subtitle">З'єднай вид спорту з його інвентарем — торкнись двох карток</div>
   <div class="pairs-grid" id="pairs-grid"></div>
   <div class="pairs-score" id="pairs-score">Знайдено: 0 / 6</div>
   <div class="nav-btn-row" style="margin-top: clamp(8px,1.5vh,16px)">
-    <button class="btn-secondary" onclick="goTo('screen-warmup')">◀ Руханка</button>
+    <button class="btn-secondary" onclick="goTo('screen-warmup'); startWarmup();">◀ Руханка</button>
     <button class="btn-secondary btn-gold" id="pairs-next" onclick="goTo('screen-finish')" style="display:none">Завершити ▶</button>
   </div>
 </div>
 
-<!-- ═══ SCREEN 4: FINISH ═══ -->
 <div class="screen" id="screen-finish">
   <div class="finish-emoji">🏆</div>
   <div class="finish-title">Молодці, Олімпійці!</div>
@@ -524,11 +518,16 @@ for (let i = 0; i < 30; i++) {
 function goTo(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  
+  // Якщо йдемо геть з руханки — зупиняємо фоновий таймер
+  if (id !== 'screen-warmup') {
+    clearInterval(timerInterval);
+  }
 }
 
 // ═══ WARM-UP ═══
 const SPORTS = [
-  { emoji: '🏊', name: 'Плавання',         action: 'Покажи, як пливеш!' },
+  { emoji: '🏊', name: 'Плавання',        action: 'Покажи, як пливеш!' },
   { emoji: '🏃', name: 'Біг',              action: 'Побіжи на місці!' },
   { emoji: '🤸', name: 'Стрибки у висоту', action: 'Стрибни якнайвище!' },
   { emoji: '🚣', name: 'Веслування',       action: 'Веслуй руками!' },
@@ -565,7 +564,7 @@ function updateSportDisplay(idx) {
 }
 
 function startTimer() {
-  clearInterval(timerInterval);
+  clearInterval(timerInterval); // Очищення старого інтервалу ПЕРЕД запуском нового
   timeLeft = 20;
   updateTimerUI();
   timerInterval = setInterval(() => {
@@ -574,7 +573,7 @@ function startTimer() {
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
       if (currentSport < SPORTS.length - 1) {
-        setTimeout(nextSport, 400);
+        nextSport(); // Перехід без затримок setTimeout, щоб не було накладання
       }
     }
   }, 1000);
@@ -586,7 +585,7 @@ function updateTimerUI() {
   const offset = circumference * (1 - progress);
   const circle = document.getElementById('timer-circle');
   circle.style.strokeDashoffset = offset;
-  circle.style.stroke = timeLeft > 8 ? 'var(--olympic-gold)' : '#FF4444';
+  circle.style.stroke = timeLeft > 5 ? 'var(--olympic-gold)' : '#FF4444'; // червоніє на останніх 5 сек
 }
 
 function startWarmup() {
@@ -636,7 +635,8 @@ function initPairs() {
     items.push({ id: 'sport-' + i, label: p.sport, pairId: i, type: 'sport' });
     items.push({ id: 'tool-'  + i, label: p.tool,  pairId: i, type: 'tool' });
   });
-  // Shuffle
+
+  // Перемішування Fisher-Yates
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [items[i], items[j]] = [items[j], items[i]];
@@ -691,7 +691,7 @@ function selectCard(card) {
   }
 }
 
-// Init pills on load
+// Ініціалізація індикаторів при завантаженні
 buildPills();
 </script>
 </body>
