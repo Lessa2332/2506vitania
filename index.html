@@ -295,6 +295,31 @@
   }
   .btn-gold:hover { box-shadow: 0 6px 30px rgba(255,215,0,0.4); }
 
+  /* ═══ MUTE BUTTON ═══ */
+  .mute-btn {
+    position: fixed;
+    top: clamp(12px, 2vh, 20px);
+    right: clamp(12px, 2vw, 20px);
+    width: clamp(44px, 7vw, 56px);
+    height: clamp(44px, 7vw, 56px);
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 1.5px solid rgba(255,255,255,0.25);
+    color: var(--olympic-white);
+    font-size: clamp(20px, 3.5vw, 28px);
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .mute-btn:hover { background: rgba(255,255,255,0.2); }
+  .mute-btn:active { transform: scale(0.92); }
+  .mute-btn.muted { opacity: 0.5; }
+
   #screen-pairs {
     background: linear-gradient(160deg, #001845 0%, #004080 100%);
     overflow-y: auto;
@@ -426,6 +451,9 @@
 
 <div class="stars" id="stars"></div>
 
+<!-- Кнопка вимкнення звуку -->
+<button class="mute-btn" id="mute-btn" onclick="toggleMute()" title="Вимкнути/увімкнути звук">🔊</button>
+
 <div class="screen active" id="screen-welcome">
   <div class="olympic-flame">🔥</div>
   <div class="rings-container">
@@ -512,11 +540,119 @@ for (let i = 0; i < 30; i++) {
   starsEl.appendChild(s);
 }
 
+// ═══ AUDIO SYSTEM (Web Audio API) ═══
+let audioCtx = null;
+let isMuted = false;
+
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {
+    console.warn('Web Audio API не підтримується');
+  }
+}
+
+// Ініціалізуємо аудіо при першому кліку користувача
+document.addEventListener('click', initAudio, { once: true });
+document.addEventListener('touchstart', initAudio, { once: true });
+
+// Універсальна функція для програвання тону
+function playTone({ freq = 440, duration = 0.1, type = 'sine', volume = 0.3, attack = 0.005, release = 0.05 }) {
+  if (isMuted || !audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, now);
+
+  // Плавна атака і загасання, щоб уникнути клацань
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + attack);
+  gain.gain.linearRampToValueAtTime(0, now + duration - release);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(now);
+  osc.stop(now + duration);
+}
+
+// Тихий тік кожну секунду
+function playTick() {
+  playTone({ freq: 800, duration: 0.05, type: 'sine', volume: 0.15 });
+}
+
+// Гучний попереджувальний тік (останні 5 секунд)
+function playWarning() {
+  playTone({ freq: 1200, duration: 0.1, type: 'square', volume: 0.25 });
+}
+
+// Мелодійний перехід на новий вид спорту (акорд C-E-G)
+function playTransition() {
+  if (isMuted || !audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+  notes.forEach((freq, i) => {
+    setTimeout(() => {
+      playTone({ freq, duration: 0.2, type: 'triangle', volume: 0.2 });
+    }, i * 70);
+  });
+}
+
+// Фінальний свисток (коли час вичерпано)
+function playFinishWhistle() {
+  if (isMuted || !audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(600, now);
+  osc.frequency.linearRampToValueAtTime(900, now + 0.15);
+  osc.frequency.linearRampToValueAtTime(700, now + 0.4);
+
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+  gain.gain.linearRampToValueAtTime(0, now + 0.45);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + 0.5);
+}
+
+// Звук успіху (для гри «Пари»)
+function playSuccess() {
+  if (isMuted || !audioCtx) return;
+  playTone({ freq: 659.25, duration: 0.1, type: 'triangle', volume: 0.25 });
+  setTimeout(() => playTone({ freq: 987.77, duration: 0.15, type: 'triangle', volume: 0.25 }), 100);
+}
+
+// Звук помилки
+function playError() {
+  if (isMuted || !audioCtx) return;
+  playTone({ freq: 200, duration: 0.15, type: 'sawtooth', volume: 0.2 });
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = isMuted ? '🔇' : '🔊';
+  btn.classList.toggle('muted', isMuted);
+}
+
 // ═══ NAVIGATION ═══
 function goTo(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  
+
   if (id !== 'screen-warmup') {
     clearInterval(timerInterval);
   }
@@ -576,13 +712,26 @@ function startTimer() {
   timerInterval = setInterval(() => {
     timeLeft--;
     updateTimerUI();
+
+    // Звук таймера
+    if (timeLeft > 0) {
+      if (timeLeft <= 5) {
+        playWarning(); // Гучний тік на останніх 5 сек
+      } else {
+        playTick();    // Тихий тік
+      }
+    }
+
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
+      playFinishWhistle(); // Фінальний свисток
       if (currentSport < SPORTS.length - 1) {
-        nextSport();
+        setTimeout(() => nextSport(), 500);
       } else {
-        goTo('screen-pairs');
-        initPairs();
+        setTimeout(() => {
+          goTo('screen-pairs');
+          initPairs();
+        }, 500);
       }
     }
   }, 1000);
@@ -606,17 +755,18 @@ function startWarmup() {
 function nextSport() {
   if (isTransitioning) return;
   isTransitioning = true;
-  
+
   if (currentSport < SPORTS.length - 1) {
     currentSport++;
     updateSportDisplay(currentSport);
+    playTransition(); // Мелодія переходу
     startTimer();
   } else {
     clearInterval(timerInterval);
     goTo('screen-pairs');
     initPairs();
   }
-  
+
   setTimeout(() => { isTransitioning = false; }, 400);
 }
 
@@ -624,11 +774,12 @@ function prevSport() {
   if (isTransitioning) return;
   if (currentSport <= 0) return;
   isTransitioning = true;
-  
+
   currentSport--;
   updateSportDisplay(currentSport);
+  playTransition();
   startTimer();
-  
+
   setTimeout(() => { isTransitioning = false; }, 400);
 }
 
@@ -701,6 +852,7 @@ function selectCard(card) {
         a.classList.replace('selected', 'matched');
         b.classList.replace('selected', 'matched');
         matched++;
+        playSuccess(); // ✅ Звук успіху
         document.getElementById('pairs-score').textContent = `Знайдено: ${matched} / 6`;
         selected = [];
         isProcessing = false;
@@ -711,6 +863,7 @@ function selectCard(card) {
     } else {
       setTimeout(() => {
         a.classList.add('wrong'); b.classList.add('wrong');
+        playError(); // ❌ Звук помилки
         setTimeout(() => {
           a.classList.remove('selected', 'wrong');
           b.classList.remove('selected', 'wrong');
